@@ -354,6 +354,67 @@ class UIManager {
 
     // Load saved video settings
     this.loadVideoSettings();
+
+    // Apply configuration button
+    const applyConfigBtn = document.getElementById('apply-config-btn');
+    if (applyConfigBtn) {
+      applyConfigBtn.addEventListener('click', () => this.applyConfiguration());
+    }
+  }
+
+  async applyConfiguration() {
+    const applyBtn = document.getElementById('apply-config-btn');
+    const originalContent = applyBtn.innerHTML;
+
+    // Set loading state
+    applyBtn.classList.add('loading');
+    applyBtn.innerHTML = '<div class="spinner"></div> Aplicando...';
+    applyBtn.disabled = true;
+
+    try {
+      // Get current active tab (should be Sora)
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+      if (!tab || !tab.url?.includes('sora')) {
+        throw new Error('Abra a página do Sora primeiro!');
+      }
+
+      // Send message to content script to apply settings
+      const response = await chrome.tabs.sendMessage(tab.id, {
+        type: 'APPLY_VIDEO_SETTINGS',
+        data: this.videoSettings
+      });
+
+      if (response?.success) {
+        // Success state
+        applyBtn.classList.remove('loading');
+        applyBtn.classList.add('success');
+        applyBtn.innerHTML = `
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          Configuração Aplicada!
+        `;
+
+        // Reset after 2 seconds
+        setTimeout(() => {
+          applyBtn.classList.remove('success');
+          applyBtn.innerHTML = originalContent;
+          applyBtn.disabled = false;
+        }, 2000);
+
+        this.showNotification('Configurações aplicadas com sucesso!', 'success');
+      } else {
+        throw new Error(response?.error || 'Erro ao aplicar configurações');
+      }
+
+    } catch (error) {
+      console.error('[Popup] Error applying config:', error);
+      applyBtn.classList.remove('loading');
+      applyBtn.innerHTML = originalContent;
+      applyBtn.disabled = false;
+      this.showNotification(error.message || 'Erro ao aplicar configurações', 'error');
+    }
   }
 
   closeAllVideoDropdowns() {
