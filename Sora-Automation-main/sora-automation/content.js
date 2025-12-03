@@ -212,9 +212,181 @@ class SoraAutomation {
         sendResponse(this.getStatus());
         break;
 
+      case 'APPLY_VIDEO_SETTINGS':
+        this.applyVideoSettings(msg.data).then(result => {
+          sendResponse(result);
+        }).catch(err => {
+          sendResponse({ success: false, error: err.message });
+        });
+        return true; // Keep channel open for async response
+
       default:
         sendResponse({ error: 'Unknown message' });
     }
+  }
+
+  // ============================================================
+  // APPLY VIDEO SETTINGS TO SORA UI
+  // ============================================================
+  async applyVideoSettings(settings) {
+    this.log('🎛️ Aplicando configurações de vídeo...', 'color: #667eea; font-weight: bold');
+    this.log(`   Model: ${settings.model}`);
+    this.log(`   Orientation: ${settings.orientation}`);
+    this.log(`   Duration: ${settings.duration}s`);
+
+    try {
+      // Find and click the settings dropdown button
+      // Look for button with text that might indicate video settings
+      const settingsButton = await this.findSettingsButton();
+
+      if (!settingsButton) {
+        throw new Error('Botão de configurações não encontrado');
+      }
+
+      // Click to open main dropdown
+      settingsButton.click();
+      await this.sleep(300);
+
+      // Apply Model setting
+      await this.applySetting('Model', settings.model === 'sora2pro' ? 'Sora 2 Pro' : 'Sora 2');
+      await this.sleep(200);
+
+      // Re-open dropdown for next setting
+      settingsButton.click();
+      await this.sleep(300);
+
+      // Apply Orientation setting
+      await this.applySetting('Orientation', settings.orientation === 'portrait' ? 'Portrait' : 'Landscape');
+      await this.sleep(200);
+
+      // Re-open dropdown for next setting
+      settingsButton.click();
+      await this.sleep(300);
+
+      // Apply Duration setting
+      await this.applySetting('Duration', settings.duration === '15' ? '15 seconds' : '10 seconds');
+      await this.sleep(200);
+
+      // Close any open dropdown by clicking outside
+      document.body.click();
+
+      this.log('✅ Configurações aplicadas com sucesso!', 'color: #00ff00; font-weight: bold');
+      return { success: true };
+
+    } catch (error) {
+      this.error('❌ Erro ao aplicar configurações:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async findSettingsButton() {
+    // Try multiple selectors to find the settings/options button
+    const selectors = [
+      // Button containing "Sora" text (model indicator)
+      'button:has(span:contains("Sora"))',
+      // Button with settings-like appearance
+      '[data-testid="video-settings"]',
+      '[aria-label*="settings" i]',
+      '[aria-label*="options" i]',
+      // Buttons near the textarea
+      'button[class*="settings"]',
+      'button[class*="option"]',
+    ];
+
+    // First, try to find a button that shows current model (Sora 2)
+    const allButtons = document.querySelectorAll('button');
+    for (const btn of allButtons) {
+      const text = btn.textContent || '';
+      if (text.includes('Sora 2') || text.includes('Portrait') || text.includes('Landscape') || text.match(/\d+s$/)) {
+        // This might be the settings button showing current value
+        return btn;
+      }
+    }
+
+    // Try role="menu" triggers
+    const menuTriggers = document.querySelectorAll('[aria-haspopup="menu"]');
+    for (const trigger of menuTriggers) {
+      const text = trigger.textContent || '';
+      if (text.includes('Sora') || text.includes('Portrait') || text.includes('Landscape')) {
+        return trigger;
+      }
+    }
+
+    // Look for dropdown triggers near prompt input
+    const dropdownTriggers = document.querySelectorAll('[data-radix-collection-item], [role="menuitem"]');
+    for (const trigger of dropdownTriggers) {
+      const text = trigger.textContent || '';
+      if (text.includes('Model') || text.includes('Orientation') || text.includes('Duration')) {
+        return trigger.closest('button') || trigger;
+      }
+    }
+
+    return null;
+  }
+
+  async applySetting(settingName, value) {
+    this.log(`   📝 Configurando ${settingName}: ${value}`);
+
+    // Find the menu item for this setting
+    const menuItems = document.querySelectorAll('[role="menuitem"]');
+    let settingTrigger = null;
+
+    for (const item of menuItems) {
+      const text = item.textContent || '';
+      if (text.includes(settingName)) {
+        settingTrigger = item;
+        break;
+      }
+    }
+
+    if (!settingTrigger) {
+      this.log(`   ⚠️ Menu item para ${settingName} não encontrado, tentando alternativa...`);
+      // Try clicking directly on the value option if dropdown is already showing submenu
+      const option = this.findOptionByValue(value);
+      if (option) {
+        option.click();
+        await this.sleep(200);
+        return;
+      }
+      throw new Error(`Configuração ${settingName} não encontrada`);
+    }
+
+    // Click to open submenu
+    settingTrigger.click();
+    await this.sleep(300);
+
+    // Now find and click the value option
+    const option = this.findOptionByValue(value);
+    if (!option) {
+      throw new Error(`Opção ${value} não encontrada`);
+    }
+
+    option.click();
+    await this.sleep(200);
+  }
+
+  findOptionByValue(value) {
+    // Look for radio menu items or regular menu items with matching text
+    const options = document.querySelectorAll('[role="menuitemradio"], [role="menuitem"]');
+
+    for (const opt of options) {
+      const text = opt.textContent || '';
+      // Clean text and compare
+      if (text.includes(value)) {
+        return opt;
+      }
+    }
+
+    // Also try by span content
+    const spans = document.querySelectorAll('[role="menu"] span');
+    for (const span of spans) {
+      if (span.textContent?.includes(value)) {
+        const clickable = span.closest('[role="menuitemradio"]') || span.closest('[role="menuitem"]') || span.closest('button');
+        if (clickable) return clickable;
+      }
+    }
+
+    return null;
   }
 
   // ============================================================
