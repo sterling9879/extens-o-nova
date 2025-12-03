@@ -10,9 +10,9 @@ class SoraPromptAutomation {
   constructor() {
     // Configuracoes
     this.config = {
-      orientation: 'portrait',  // portrait, landscape, square
-      duration: 300,            // 150 = 5s, 300 = 10s, 450 = 20s
-      model: 'sy_8',
+      orientation: 'portrait',  // portrait, landscape
+      duration: 300,            // 300 = 10s, 450 = 15s
+      model: 'sora2pro',        // sora2pro ou sora2
       submitMode: 'dom',        // 'dom' ou 'api'
       delay: 3000               // delay entre prompts em ms
     };
@@ -689,20 +689,31 @@ class SoraPromptAutomation {
         <!-- Configuracoes -->
         <div class="sqm-config">
           <div class="sqm-config-row">
+            <label>Modelo:</label>
+            <select id="sqm-model">
+              <option value="sora2pro" selected>Sora 2 Pro</option>
+              <option value="sora2">Sora 2</option>
+            </select>
+          </div>
+          <div class="sqm-config-row">
             <label>Orientacao:</label>
             <select id="sqm-orientation">
               <option value="portrait">Retrato (9:16)</option>
               <option value="landscape">Paisagem (16:9)</option>
-              <option value="square">Quadrado (1:1)</option>
             </select>
           </div>
+        </div>
+
+        <div class="sqm-config">
           <div class="sqm-config-row">
             <label>Duracao:</label>
             <select id="sqm-duration">
-              <option value="150">5 segundos</option>
               <option value="300" selected>10 segundos</option>
-              <option value="450">20 segundos</option>
+              <option value="450">15 segundos</option>
             </select>
+          </div>
+          <div class="sqm-config-row">
+            <button class="sqm-btn sqm-btn-apply" id="sqm-apply-config">Aplicar Configuracao</button>
           </div>
         </div>
 
@@ -815,6 +826,13 @@ class SoraPromptAutomation {
     });
 
     // Seletores de configuracao
+    document.getElementById('sqm-model').addEventListener('change', (e) => {
+      this.config.model = e.target.value;
+      this.saveToStorage();
+      const modelName = e.target.value === 'sora2pro' ? 'Sora 2 Pro' : 'Sora 2';
+      this.log(`Modelo: ${modelName}`);
+    });
+
     document.getElementById('sqm-orientation').addEventListener('change', (e) => {
       this.config.orientation = e.target.value;
       this.saveToStorage();
@@ -824,8 +842,13 @@ class SoraPromptAutomation {
     document.getElementById('sqm-duration').addEventListener('change', (e) => {
       this.config.duration = parseInt(e.target.value);
       this.saveToStorage();
-      const seconds = { '150': '5s', '300': '10s', '450': '20s' }[e.target.value];
+      const seconds = { '300': '10s', '450': '15s' }[e.target.value];
       this.log(`Duracao: ${seconds}`);
+    });
+
+    // Botao Aplicar Configuracao
+    document.getElementById('sqm-apply-config').addEventListener('click', () => {
+      this.applyConfigurationToSora();
     });
 
     document.getElementById('sqm-delay').addEventListener('change', (e) => {
@@ -837,6 +860,7 @@ class SoraPromptAutomation {
 
     // Restaura config nos selects
     document.getElementById('sqm-submit-mode').value = this.config.submitMode;
+    document.getElementById('sqm-model').value = this.config.model || 'sora2pro';
     document.getElementById('sqm-orientation').value = this.config.orientation;
     document.getElementById('sqm-duration').value = this.config.duration.toString();
     document.getElementById('sqm-delay').value = this.config.delay.toString();
@@ -1004,6 +1028,175 @@ class SoraPromptAutomation {
       isDragging = false;
       header.style.cursor = 'move';
     });
+  }
+
+  // ========================================
+  // Aplicar Configuracao ao Sora UI
+  // ========================================
+
+  async applyConfigurationToSora() {
+    this.log('Aplicando configuracao ao Sora...');
+
+    try {
+      // 1. Aplicar Modelo
+      await this.applyModelSetting();
+      await this.sleep(500);
+
+      // 2. Aplicar Orientacao
+      await this.applyOrientationSetting();
+      await this.sleep(500);
+
+      // 3. Aplicar Duracao
+      await this.applyDurationSetting();
+
+      this.log('Configuracao aplicada com sucesso!');
+    } catch (error) {
+      this.log(`Erro ao aplicar configuracao: ${error.message}`);
+    }
+  }
+
+  async applyModelSetting() {
+    const modelName = this.config.model === 'sora2pro' ? 'Sora 2 Pro' : 'Sora 2';
+    this.log(`Aplicando modelo: ${modelName}`);
+
+    // Procura pelo botao de modelo na interface do Sora
+    const modelButton = this.findSettingButton(['Sora 2 Pro', 'Sora 2']);
+    if (!modelButton) {
+      this.log('Botao de modelo nao encontrado');
+      return;
+    }
+
+    // Clica para abrir o dropdown
+    modelButton.click();
+    await this.sleep(300);
+
+    // Procura pela opcao correta no menu
+    const menuItem = this.findMenuItemByText(modelName);
+    if (menuItem) {
+      menuItem.click();
+      this.log(`Modelo ${modelName} selecionado`);
+    } else {
+      // Fecha o dropdown se nao encontrou
+      document.body.click();
+      this.log('Opcao de modelo nao encontrada no menu');
+    }
+  }
+
+  async applyOrientationSetting() {
+    const orientationLabels = {
+      'portrait': 'Portrait',
+      'landscape': 'Landscape'
+    };
+    const orientationName = orientationLabels[this.config.orientation] || 'Portrait';
+    this.log(`Aplicando orientacao: ${orientationName}`);
+
+    // Procura pelo botao de orientacao
+    const orientationButton = this.findSettingButton(['Portrait', 'Landscape', '9:16', '16:9']);
+    if (!orientationButton) {
+      this.log('Botao de orientacao nao encontrado');
+      return;
+    }
+
+    orientationButton.click();
+    await this.sleep(300);
+
+    // Procura pela opcao correta
+    const menuItem = this.findMenuItemByText(orientationName);
+    if (menuItem) {
+      menuItem.click();
+      this.log(`Orientacao ${orientationName} selecionada`);
+    } else {
+      document.body.click();
+      this.log('Opcao de orientacao nao encontrada no menu');
+    }
+  }
+
+  async applyDurationSetting() {
+    const durationLabels = {
+      300: '10s',
+      450: '15s'
+    };
+    const durationName = durationLabels[this.config.duration] || '10s';
+    this.log(`Aplicando duracao: ${durationName}`);
+
+    // Procura pelo botao de duracao
+    const durationButton = this.findSettingButton(['10s', '15s', '5s', '20s']);
+    if (!durationButton) {
+      this.log('Botao de duracao nao encontrado');
+      return;
+    }
+
+    durationButton.click();
+    await this.sleep(300);
+
+    // Procura pela opcao correta
+    const menuItem = this.findMenuItemByText(durationName);
+    if (menuItem) {
+      menuItem.click();
+      this.log(`Duracao ${durationName} selecionada`);
+    } else {
+      document.body.click();
+      this.log('Opcao de duracao nao encontrada no menu');
+    }
+  }
+
+  findSettingButton(possibleTexts) {
+    // Metodo 1: Busca por botoes com aria-haspopup (dropdowns Radix UI)
+    const dropdownButtons = document.querySelectorAll('button[aria-haspopup="menu"]');
+    for (const btn of dropdownButtons) {
+      const text = btn.textContent.trim();
+      for (const searchText of possibleTexts) {
+        if (text.includes(searchText)) {
+          return btn;
+        }
+      }
+    }
+
+    // Metodo 2: Busca por elementos com role menuitem ou menuitemradio
+    const menuTriggers = document.querySelectorAll('[role="menuitem"], [data-radix-collection-item]');
+    for (const trigger of menuTriggers) {
+      const text = trigger.textContent.trim();
+      for (const searchText of possibleTexts) {
+        if (text.includes(searchText)) {
+          return trigger;
+        }
+      }
+    }
+
+    // Metodo 3: Busca por qualquer botao que contenha o texto
+    const allButtons = document.querySelectorAll('button');
+    for (const btn of allButtons) {
+      const text = btn.textContent.trim();
+      for (const searchText of possibleTexts) {
+        if (text.includes(searchText)) {
+          return btn;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  findMenuItemByText(searchText) {
+    // Busca em menus Radix UI
+    const menuItems = document.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [data-radix-collection-item]');
+    for (const item of menuItems) {
+      const text = item.textContent.trim();
+      if (text.includes(searchText)) {
+        return item;
+      }
+    }
+
+    // Busca em elementos de opcao genericos
+    const options = document.querySelectorAll('[role="option"], .menu-item, [class*="MenuItem"]');
+    for (const option of options) {
+      const text = option.textContent.trim();
+      if (text.includes(searchText)) {
+        return option;
+      }
+    }
+
+    return null;
   }
 
   // ========================================
