@@ -164,9 +164,17 @@ class UIManager {
     this.selectedTemplateId = null;
     this.scenes = [];
     this.processingState = null;
-    
+
+    // Video settings state
+    this.videoSettings = {
+      model: 'sora2',
+      orientation: 'portrait',
+      duration: '10'
+    };
+
     this.initElements();
     this.initEventListeners();
+    this.initVideoSettings();
     this.init();
   }
 
@@ -293,6 +301,203 @@ class UIManager {
         this.updateStatusDisplay(message.data);
       }
     });
+  }
+
+  // ========================================
+  // Video Settings Management
+  // ========================================
+
+  initVideoSettings() {
+    // Get all setting triggers
+    const settingTriggers = document.querySelectorAll('.setting-trigger');
+
+    settingTriggers.forEach(trigger => {
+      trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const settingItem = trigger.closest('.video-setting-item');
+        const isOpen = settingItem.classList.contains('open');
+
+        // Close all other dropdowns
+        this.closeAllVideoDropdowns();
+
+        // Toggle current dropdown
+        if (!isOpen) {
+          settingItem.classList.add('open');
+        }
+      });
+    });
+
+    // Handle dropdown option clicks
+    const dropdownOptions = document.querySelectorAll('.dropdown-option');
+    dropdownOptions.forEach(option => {
+      option.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const dropdown = option.closest('.setting-dropdown');
+        const settingItem = option.closest('.video-setting-item');
+        const settingType = settingItem.querySelector('.setting-trigger').dataset.setting;
+        const value = option.dataset.value;
+
+        // Update selection
+        this.selectVideoOption(settingType, value, dropdown, settingItem);
+
+        // Close dropdown
+        settingItem.classList.remove('open');
+      });
+    });
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.video-setting-item')) {
+        this.closeAllVideoDropdowns();
+      }
+    });
+
+    // Load saved video settings
+    this.loadVideoSettings();
+  }
+
+  closeAllVideoDropdowns() {
+    document.querySelectorAll('.video-setting-item.open').forEach(item => {
+      item.classList.remove('open');
+    });
+  }
+
+  selectVideoOption(settingType, value, dropdown, settingItem) {
+    // Remove selected class from all options in this dropdown
+    dropdown.querySelectorAll('.dropdown-option').forEach(opt => {
+      opt.classList.remove('selected');
+    });
+
+    // Add selected class to clicked option
+    const selectedOption = dropdown.querySelector(`[data-value="${value}"]`);
+    selectedOption.classList.add('selected');
+
+    // Update displayed value
+    const valueDisplay = settingItem.querySelector('.setting-value');
+
+    // Update the state
+    this.videoSettings[settingType] = value;
+
+    // Update display text based on setting type
+    switch(settingType) {
+      case 'model':
+        const modelText = value === 'sora2pro' ? 'Sora 2 Pro' : 'Sora 2';
+        valueDisplay.textContent = modelText;
+        // Show/hide info icon for Sora 2
+        const infoIcon = settingItem.querySelector('#model-info-icon');
+        if (infoIcon) {
+          infoIcon.style.display = value === 'sora2' ? 'inline-flex' : 'none';
+        }
+        break;
+
+      case 'orientation':
+        const orientationText = value === 'portrait' ? 'Portrait' : 'Landscape';
+        valueDisplay.textContent = orientationText;
+        // Update the icon in the trigger
+        this.updateOrientationIcon(value);
+        break;
+
+      case 'duration':
+        valueDisplay.textContent = value + 's';
+        break;
+    }
+
+    // Save to storage
+    this.saveVideoSettings();
+  }
+
+  updateOrientationIcon(orientation) {
+    const iconContainer = document.getElementById('orientation-icon');
+    if (!iconContainer) return;
+
+    if (orientation === 'portrait') {
+      iconContainer.innerHTML = '<path fill="currentColor" d="M10.759 1h2.482c.805 0 1.47 0 2.01.044.563.046 1.08.145 1.565.392a4 4 0 0 1 1.748 1.748c.247.485.346 1.002.392 1.564C19 5.29 19 5.954 19 6.758v10.483c0 .805 0 1.47-.044 2.01-.046.563-.145 1.08-.392 1.565a4 4 0 0 1-1.748 1.748c-.485.247-1.002.346-1.564.392-.541.044-1.206.044-2.01.044h-2.483c-.805 0-1.47 0-2.01-.044-.563-.046-1.08-.145-1.565-.392a4 4 0 0 1-1.748-1.748c-.247-.485-.346-1.002-.392-1.564C5 18.71 5 18.046 5 17.242V6.758c0-.805 0-1.47.044-2.01.046-.563.145-1.08.392-1.565a4 4 0 0 1 1.748-1.748c.485-.247 1.002-.346 1.564-.392C9.29 1 9.954 1 10.758 1M8.91 3.038c-.438.035-.663.1-.819.18a2 2 0 0 0-.874.874c-.08.156-.145.38-.18.819C7 5.361 7 5.943 7 6.8v10.4c0 .857 0 1.439.038 1.889.035.438.1.663.18.819a2 2 0 0 0 .874.874c.156.08.38.145.819.18C9.361 21 9.943 21 10.8 21h2.4c.857 0 1.439 0 1.889-.038.438-.035.663-.1.819-.18a2 2 0 0 0 .874-.874c.08-.156.145-.38.18-.819.037-.45.038-1.032.038-1.889V6.8c0-.857 0-1.439-.038-1.889-.035-.438-.1-.663-.18-.819a2 2 0 0 0-.874-.874c-.156-.08-.38-.145-.819-.18C14.639 3 14.057 3 13.2 3h-2.4c-.857 0-1.439 0-1.889.038"></path>';
+    } else {
+      iconContainer.innerHTML = '<path fill="currentColor" d="M6.759 5H17.24c.805 0 1.47 0 2.01.044.563.046 1.08.145 1.565.392a4 4 0 0 1 1.748 1.748c.247.485.346 1.002.392 1.564.044.541.044 1.206.044 2.01v2.483c0 .805 0 1.47-.044 2.01-.046.563-.145 1.08-.392 1.565a4 4 0 0 1-1.748 1.748c-.485.247-1.002.346-1.564.392-.541.044-1.206.044-2.01.044H6.758c-.805 0-1.47 0-2.01-.044-.563-.046-1.08-.145-1.565-.392a4 4 0 0 1-1.748-1.748c-.247-.485-.346-1.002-.392-1.564C1 14.71 1 14.046 1 13.242v-2.483c0-.805 0-1.47.044-2.01.046-.563.145-1.08.392-1.565a4 4 0 0 1 1.748-1.748c.485-.247 1.002-.346 1.564-.392C5.29 5 5.954 5 6.758 5M4.91 7.038c-.438.035-.663.1-.819.18a2 2 0 0 0-.874.874c-.08.156-.145.38-.18.819C3 9.361 3 9.943 3 10.8v2.4c0 .857 0 1.439.038 1.889.035.438.1.663.18.819a2 2 0 0 0 .874.874c.156.08.38.145.819.18C5.361 17 5.943 17 6.8 17h10.4c.857 0 1.439 0 1.889-.038.438-.035.663-.1.819-.18a2 2 0 0 0 .874-.874c.08-.156.145-.38.18-.819.037-.45.038-1.032.038-1.889v-2.4c0-.857 0-1.439-.038-1.889-.035-.438-.1-.663-.18-.819a2 2 0 0 0-.874-.874c-.156-.08-.38-.145-.819-.18C18.639 7 18.057 7 17.2 7H6.8c-.857 0-1.439 0-1.889.038"></path>';
+    }
+  }
+
+  async loadVideoSettings() {
+    try {
+      const result = await chrome.storage.local.get(['videoSettings']);
+      if (result.videoSettings) {
+        this.videoSettings = { ...this.videoSettings, ...result.videoSettings };
+
+        // Apply loaded settings to UI
+        this.applyVideoSettingsToUI();
+      }
+    } catch (error) {
+      console.error('[Popup] Error loading video settings:', error);
+    }
+  }
+
+  applyVideoSettingsToUI() {
+    // Apply model setting
+    const modelDropdown = document.getElementById('model-dropdown');
+    const modelItem = document.getElementById('model-setting');
+    if (modelDropdown && modelItem) {
+      this.selectVideoOptionUI('model', this.videoSettings.model, modelDropdown, modelItem);
+    }
+
+    // Apply orientation setting
+    const orientationDropdown = document.getElementById('orientation-dropdown');
+    const orientationItem = document.getElementById('orientation-setting');
+    if (orientationDropdown && orientationItem) {
+      this.selectVideoOptionUI('orientation', this.videoSettings.orientation, orientationDropdown, orientationItem);
+    }
+
+    // Apply duration setting
+    const durationDropdown = document.getElementById('duration-dropdown');
+    const durationItem = document.getElementById('duration-setting');
+    if (durationDropdown && durationItem) {
+      this.selectVideoOptionUI('duration', this.videoSettings.duration, durationDropdown, durationItem);
+    }
+  }
+
+  selectVideoOptionUI(settingType, value, dropdown, settingItem) {
+    // Remove selected class from all options
+    dropdown.querySelectorAll('.dropdown-option').forEach(opt => {
+      opt.classList.remove('selected');
+    });
+
+    // Add selected class to the option
+    const selectedOption = dropdown.querySelector(`[data-value="${value}"]`);
+    if (selectedOption) {
+      selectedOption.classList.add('selected');
+    }
+
+    // Update displayed value
+    const valueDisplay = settingItem.querySelector('.setting-value');
+
+    switch(settingType) {
+      case 'model':
+        const modelText = value === 'sora2pro' ? 'Sora 2 Pro' : 'Sora 2';
+        valueDisplay.textContent = modelText;
+        const infoIcon = settingItem.querySelector('#model-info-icon');
+        if (infoIcon) {
+          infoIcon.style.display = value === 'sora2' ? 'inline-flex' : 'none';
+        }
+        break;
+
+      case 'orientation':
+        const orientationText = value === 'portrait' ? 'Portrait' : 'Landscape';
+        valueDisplay.textContent = orientationText;
+        this.updateOrientationIcon(value);
+        break;
+
+      case 'duration':
+        valueDisplay.textContent = value + 's';
+        break;
+    }
+  }
+
+  async saveVideoSettings() {
+    try {
+      await chrome.storage.local.set({ videoSettings: this.videoSettings });
+      console.log('[Popup] Video settings saved:', this.videoSettings);
+    } catch (error) {
+      console.error('[Popup] Error saving video settings:', error);
+    }
   }
 
   async init() {
@@ -527,7 +732,8 @@ class UIManager {
           data: {
             prompts: prompts,
             templateId: this.selectedTemplateId,
-            settings: settings
+            settings: settings,
+            videoSettings: this.videoSettings
           }
         }, (startResponse) => {
           if (chrome.runtime.lastError) {
