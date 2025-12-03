@@ -236,39 +236,34 @@ class SoraAutomation {
 
     try {
       // Find and click the settings dropdown button
-      // Look for button with text that might indicate video settings
       const settingsButton = await this.findSettingsButton();
 
       if (!settingsButton) {
-        throw new Error('Botão de configurações não encontrado');
+        this.log('❌ Botão de configurações não encontrado. Elementos na página:', 'color: #ff0000');
+        this.debugPageElements();
+        throw new Error('Botão de configurações não encontrado. Verifique se está na página do Sora.');
       }
+
+      this.log(`   ✅ Botão encontrado: ${settingsButton.textContent?.substring(0, 50)}`, 'color: #00ff00');
 
       // Click to open main dropdown
       settingsButton.click();
-      await this.sleep(300);
+      await this.sleep(500);
 
-      // Apply Model setting
-      await this.applySetting('Model', settings.model === 'sora2pro' ? 'Sora 2 Pro' : 'Sora 2');
-      await this.sleep(200);
+      // Apply each setting
+      const settingsToApply = [
+        { name: 'Model', value: settings.model === 'sora2pro' ? 'Sora 2 Pro' : 'Sora 2' },
+        { name: 'Orientation', value: settings.orientation === 'portrait' ? 'Portrait' : 'Landscape' },
+        { name: 'Duration', value: settings.duration === '15' ? '15 second' : '10 second' }
+      ];
 
-      // Re-open dropdown for next setting
-      settingsButton.click();
-      await this.sleep(300);
+      for (const setting of settingsToApply) {
+        await this.applyIndividualSetting(setting.name, setting.value, settingsButton);
+      }
 
-      // Apply Orientation setting
-      await this.applySetting('Orientation', settings.orientation === 'portrait' ? 'Portrait' : 'Landscape');
-      await this.sleep(200);
-
-      // Re-open dropdown for next setting
-      settingsButton.click();
-      await this.sleep(300);
-
-      // Apply Duration setting
-      await this.applySetting('Duration', settings.duration === '15' ? '15 seconds' : '10 seconds');
-      await this.sleep(200);
-
-      // Close any open dropdown by clicking outside
+      // Close any open dropdown by pressing Escape or clicking outside
       document.body.click();
+      await this.sleep(100);
 
       this.log('✅ Configurações aplicadas com sucesso!', 'color: #00ff00; font-weight: bold');
       return { success: true };
@@ -279,55 +274,107 @@ class SoraAutomation {
     }
   }
 
-  async findSettingsButton() {
-    // Try multiple selectors to find the settings/options button
-    const selectors = [
-      // Button containing "Sora" text (model indicator)
-      'button:has(span:contains("Sora"))',
-      // Button with settings-like appearance
-      '[data-testid="video-settings"]',
-      '[aria-label*="settings" i]',
-      '[aria-label*="options" i]',
-      // Buttons near the textarea
-      'button[class*="settings"]',
-      'button[class*="option"]',
-    ];
+  debugPageElements() {
+    // Log useful elements for debugging
+    const buttons = document.querySelectorAll('button');
+    this.log(`   Buttons encontrados: ${buttons.length}`);
+    buttons.forEach((btn, i) => {
+      const text = btn.textContent?.trim().substring(0, 100);
+      if (text && text.length > 0) {
+        this.log(`   [${i}] ${text}`);
+      }
+    });
 
-    // First, try to find a button that shows current model (Sora 2)
+    const menuItems = document.querySelectorAll('[role="menuitem"], [role="menu"], [aria-haspopup]');
+    this.log(`   Menu items encontrados: ${menuItems.length}`);
+  }
+
+  async findSettingsButton() {
+    // Strategy 1: Find button with current settings display (e.g., "Sora 2", "Portrait", "10s")
     const allButtons = document.querySelectorAll('button');
+
     for (const btn of allButtons) {
       const text = btn.textContent || '';
-      if (text.includes('Sora 2') || text.includes('Portrait') || text.includes('Landscape') || text.match(/\d+s$/)) {
-        // This might be the settings button showing current value
+      // Look for button that shows video settings info
+      if ((text.includes('Sora 2') || text.includes('Sora2')) &&
+          (text.includes('Portrait') || text.includes('Landscape') || text.includes('10') || text.includes('15'))) {
+        this.log('   Encontrado via texto combinado', 'color: #00aaff');
         return btn;
       }
     }
 
-    // Try role="menu" triggers
-    const menuTriggers = document.querySelectorAll('[aria-haspopup="menu"]');
-    for (const trigger of menuTriggers) {
+    // Strategy 2: Find button with video-related text
+    for (const btn of allButtons) {
+      const text = btn.textContent || '';
+      if (text.includes('Sora 2') && !text.includes('Automation')) {
+        this.log('   Encontrado via "Sora 2"', 'color: #00aaff');
+        return btn;
+      }
+    }
+
+    // Strategy 3: Find any trigger with aria-haspopup that contains settings text
+    const triggers = document.querySelectorAll('[aria-haspopup="menu"], [aria-haspopup="true"]');
+    for (const trigger of triggers) {
       const text = trigger.textContent || '';
-      if (text.includes('Sora') || text.includes('Portrait') || text.includes('Landscape')) {
+      if (text.includes('Model') || text.includes('Orientation') || text.includes('Duration') ||
+          text.includes('Sora') || text.includes('Portrait') || text.includes('Landscape')) {
+        this.log('   Encontrado via aria-haspopup', 'color: #00aaff');
         return trigger;
       }
     }
 
-    // Look for dropdown triggers near prompt input
-    const dropdownTriggers = document.querySelectorAll('[data-radix-collection-item], [role="menuitem"]');
-    for (const trigger of dropdownTriggers) {
+    // Strategy 4: Look for Radix dropdown triggers
+    const radixTriggers = document.querySelectorAll('[data-radix-collection-item]');
+    for (const trigger of radixTriggers) {
       const text = trigger.textContent || '';
-      if (text.includes('Model') || text.includes('Orientation') || text.includes('Duration')) {
-        return trigger.closest('button') || trigger;
+      if (text.includes('Sora') || text.includes('Portrait') || text.includes('Landscape')) {
+        this.log('   Encontrado via Radix', 'color: #00aaff');
+        return trigger;
+      }
+    }
+
+    // Strategy 5: Find by class patterns common in settings buttons
+    const settingsSelectors = [
+      'button[class*="settings"]',
+      'button[class*="option"]',
+      'button[class*="config"]',
+      'button[class*="menu"]',
+      '[class*="popover"] button',
+      '[class*="dropdown"] button'
+    ];
+
+    for (const selector of settingsSelectors) {
+      try {
+        const el = document.querySelector(selector);
+        if (el) {
+          this.log(`   Encontrado via selector: ${selector}`, 'color: #00aaff');
+          return el;
+        }
+      } catch (e) {
+        // Invalid selector, skip
       }
     }
 
     return null;
   }
 
-  async applySetting(settingName, value) {
+  async applyIndividualSetting(settingName, value, mainButton) {
     this.log(`   📝 Configurando ${settingName}: ${value}`);
 
-    // Find the menu item for this setting
+    // Check if dropdown is open, if not open it
+    let menu = document.querySelector('[role="menu"]');
+    if (!menu) {
+      mainButton.click();
+      await this.sleep(400);
+      menu = document.querySelector('[role="menu"]');
+    }
+
+    if (!menu) {
+      this.log(`   ⚠️ Menu não aberto para ${settingName}`, 'color: #ffaa00');
+      return;
+    }
+
+    // Find the menu item for this setting (Model, Orientation, or Duration)
     const menuItems = document.querySelectorAll('[role="menuitem"]');
     let settingTrigger = null;
 
@@ -339,50 +386,74 @@ class SoraAutomation {
       }
     }
 
-    if (!settingTrigger) {
-      this.log(`   ⚠️ Menu item para ${settingName} não encontrado, tentando alternativa...`);
-      // Try clicking directly on the value option if dropdown is already showing submenu
-      const option = this.findOptionByValue(value);
-      if (option) {
-        option.click();
-        await this.sleep(200);
-        return;
-      }
-      throw new Error(`Configuração ${settingName} não encontrada`);
+    if (settingTrigger) {
+      // Hover/click to open submenu
+      settingTrigger.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+      await this.sleep(200);
+      settingTrigger.click();
+      await this.sleep(400);
     }
-
-    // Click to open submenu
-    settingTrigger.click();
-    await this.sleep(300);
 
     // Now find and click the value option
     const option = this.findOptionByValue(value);
-    if (!option) {
-      throw new Error(`Opção ${value} não encontrada`);
+    if (option) {
+      this.log(`   ✅ Opção encontrada: ${value}`, 'color: #00ff00');
+      option.click();
+      await this.sleep(300);
+    } else {
+      this.log(`   ⚠️ Opção não encontrada: ${value}`, 'color: #ffaa00');
     }
 
-    option.click();
+    // Close submenu by clicking outside or pressing escape
+    document.body.click();
     await this.sleep(200);
   }
 
   findOptionByValue(value) {
-    // Look for radio menu items or regular menu items with matching text
-    const options = document.querySelectorAll('[role="menuitemradio"], [role="menuitem"]');
-
-    for (const opt of options) {
+    // Look for radio menu items first (submenus typically use menuitemradio)
+    const radioOptions = document.querySelectorAll('[role="menuitemradio"]');
+    for (const opt of radioOptions) {
       const text = opt.textContent || '';
-      // Clean text and compare
-      if (text.includes(value)) {
+      if (text.toLowerCase().includes(value.toLowerCase())) {
         return opt;
       }
     }
 
-    // Also try by span content
-    const spans = document.querySelectorAll('[role="menu"] span');
-    for (const span of spans) {
-      if (span.textContent?.includes(value)) {
-        const clickable = span.closest('[role="menuitemradio"]') || span.closest('[role="menuitem"]') || span.closest('button');
+    // Then try regular menu items
+    const menuItems = document.querySelectorAll('[role="menuitem"]');
+    for (const opt of menuItems) {
+      const text = opt.textContent || '';
+      if (text.toLowerCase().includes(value.toLowerCase())) {
+        return opt;
+      }
+    }
+
+    // Try finding by span text within menus
+    const allSpans = document.querySelectorAll('[role="menu"] span, [data-radix-popper-content-wrapper] span');
+    for (const span of allSpans) {
+      const text = span.textContent || '';
+      if (text.toLowerCase().includes(value.toLowerCase())) {
+        // Find clickable parent
+        const clickable = span.closest('[role="menuitemradio"]') ||
+                         span.closest('[role="menuitem"]') ||
+                         span.closest('button') ||
+                         span.closest('[data-radix-collection-item]');
         if (clickable) return clickable;
+      }
+    }
+
+    // Last resort: try clicking any element with matching text
+    const allElements = document.querySelectorAll('*');
+    for (const el of allElements) {
+      if (el.children.length === 0 || el.tagName === 'SPAN') {
+        const text = el.textContent || '';
+        if (text.trim().toLowerCase() === value.toLowerCase() ||
+            text.trim().toLowerCase().includes(value.toLowerCase())) {
+          const clickable = el.closest('[role="menuitemradio"]') ||
+                           el.closest('[role="menuitem"]') ||
+                           el.closest('button');
+          if (clickable) return clickable;
+        }
       }
     }
 
