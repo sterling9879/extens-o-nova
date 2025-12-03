@@ -10,9 +10,6 @@ class SoraPromptAutomation {
   constructor() {
     // Configuracoes
     this.config = {
-      orientation: 'portrait',  // portrait, landscape
-      duration: 300,            // 300 = 10s, 450 = 15s
-      model: 'sora2pro',        // sora2pro ou sora2
       submitMode: 'dom',        // 'dom' ou 'api'
       delay: 3000               // delay entre prompts em ms
     };
@@ -369,15 +366,15 @@ class SoraPromptAutomation {
       kind: 'video',
       prompt: prompt,
       title: null,
-      orientation: this.config.orientation,
+      orientation: 'portrait',
       size: 'small',
-      n_frames: this.config.duration,
+      n_frames: 300,
       inpaint_items: [],
       remix_target_id: null,
       metadata: null,
       cameo_ids: null,
       cameo_replacements: null,
-      model: this.config.model,
+      model: 'sora2pro',
       style_id: null,
       audio_caption: null,
       audio_transcript: null,
@@ -686,37 +683,6 @@ class SoraPromptAutomation {
           </div>
         </div>
 
-        <!-- Configuracoes -->
-        <div class="sqm-config">
-          <div class="sqm-config-row">
-            <label>Modelo:</label>
-            <select id="sqm-model">
-              <option value="sora2pro" selected>Sora 2 Pro</option>
-              <option value="sora2">Sora 2</option>
-            </select>
-          </div>
-          <div class="sqm-config-row">
-            <label>Orientacao:</label>
-            <select id="sqm-orientation">
-              <option value="portrait">Retrato (9:16)</option>
-              <option value="landscape">Paisagem (16:9)</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="sqm-config">
-          <div class="sqm-config-row">
-            <label>Duracao:</label>
-            <select id="sqm-duration">
-              <option value="300" selected>10 segundos</option>
-              <option value="450">15 segundos</option>
-            </select>
-          </div>
-          <div class="sqm-config-row">
-            <button class="sqm-btn sqm-btn-apply" id="sqm-apply-config">Aplicar Configuracao</button>
-          </div>
-        </div>
-
         <div class="sqm-config sqm-config-single">
           <div class="sqm-config-row sqm-config-full">
             <label>Pausa entre prompts:</label>
@@ -825,32 +791,6 @@ class SoraPromptAutomation {
       }
     });
 
-    // Seletores de configuracao
-    document.getElementById('sqm-model').addEventListener('change', (e) => {
-      this.config.model = e.target.value;
-      this.saveToStorage();
-      const modelName = e.target.value === 'sora2pro' ? 'Sora 2 Pro' : 'Sora 2';
-      this.log(`Modelo: ${modelName}`);
-    });
-
-    document.getElementById('sqm-orientation').addEventListener('change', (e) => {
-      this.config.orientation = e.target.value;
-      this.saveToStorage();
-      this.log(`Orientacao: ${e.target.value}`);
-    });
-
-    document.getElementById('sqm-duration').addEventListener('change', (e) => {
-      this.config.duration = parseInt(e.target.value);
-      this.saveToStorage();
-      const seconds = { '300': '10s', '450': '15s' }[e.target.value];
-      this.log(`Duracao: ${seconds}`);
-    });
-
-    // Botao Aplicar Configuracao
-    document.getElementById('sqm-apply-config').addEventListener('click', () => {
-      this.applyConfigurationToSora();
-    });
-
     document.getElementById('sqm-delay').addEventListener('change', (e) => {
       this.config.delay = parseInt(e.target.value);
       this.saveToStorage();
@@ -860,9 +800,6 @@ class SoraPromptAutomation {
 
     // Restaura config nos selects
     document.getElementById('sqm-submit-mode').value = this.config.submitMode;
-    document.getElementById('sqm-model').value = this.config.model || 'sora2pro';
-    document.getElementById('sqm-orientation').value = this.config.orientation;
-    document.getElementById('sqm-duration').value = this.config.duration.toString();
     document.getElementById('sqm-delay').value = this.config.delay.toString();
 
     // Textarea - contar prompts
@@ -1028,174 +965,6 @@ class SoraPromptAutomation {
       isDragging = false;
       header.style.cursor = 'move';
     });
-  }
-
-  // ========================================
-  // Aplicar Configuracao ao Sora UI
-  // ========================================
-
-  async applyConfigurationToSora() {
-    this.log('Aplicando configuracao ao Sora...');
-
-    try {
-      // 1. Primeiro abre o menu de Settings
-      const settingsButton = this.findSettingsButton();
-      if (!settingsButton) {
-        this.log('Botao Settings nao encontrado na pagina');
-        return;
-      }
-
-      this.log('Abrindo menu de configuracoes...');
-      settingsButton.click();
-      await this.sleep(500);
-
-      // 2. Aplicar Modelo
-      await this.applyModelSetting();
-
-      // 3. Aplicar Orientacao
-      await this.applyOrientationSetting();
-
-      // 4. Aplicar Duracao
-      await this.applyDurationSetting();
-
-      // 5. Fecha o menu pressionando Escape
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-      await this.sleep(100);
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-
-      this.log('Configuracao aplicada com sucesso!');
-    } catch (error) {
-      this.log(`Erro ao aplicar configuracao: ${error.message}`);
-    }
-  }
-
-  findSettingsButton() {
-    // Metodo 1: Busca pelo aria-label="Settings"
-    let btn = document.querySelector('button[aria-label="Settings"]');
-    if (btn) return btn;
-
-    // Metodo 2: Busca por botao com aria-haspopup que contem "Sora" no texto
-    const dropdownButtons = document.querySelectorAll('button[aria-haspopup="menu"]');
-    for (const button of dropdownButtons) {
-      const text = button.textContent.trim();
-      if (text.includes('Sora 2') || text.includes('Sora')) {
-        return button;
-      }
-    }
-
-    return null;
-  }
-
-  async applyModelSetting() {
-    const modelName = this.config.model === 'sora2pro' ? 'Sora 2 Pro' : 'Sora 2';
-    this.log(`Selecionando modelo: ${modelName}`);
-
-    // Procura o submenu de Model (menuitem com aria-haspopup)
-    const modelSubmenu = this.findSubmenuTrigger('Model');
-    if (!modelSubmenu) {
-      this.log('Submenu Model nao encontrado');
-      return;
-    }
-
-    // Clica ou hover para abrir o submenu
-    modelSubmenu.click();
-    await this.sleep(400);
-
-    // Procura pela opcao correta (menuitemradio)
-    const menuItem = this.findMenuItemRadioByText(modelName);
-    if (menuItem) {
-      menuItem.click();
-      this.log(`Modelo ${modelName} selecionado`);
-      await this.sleep(300);
-    } else {
-      this.log('Opcao de modelo nao encontrada');
-    }
-  }
-
-  async applyOrientationSetting() {
-    const orientationName = this.config.orientation === 'portrait' ? 'Portrait' : 'Landscape';
-    this.log(`Selecionando orientacao: ${orientationName}`);
-
-    // Procura o submenu de Orientation
-    const orientationSubmenu = this.findSubmenuTrigger('Orientation');
-    if (!orientationSubmenu) {
-      this.log('Submenu Orientation nao encontrado');
-      return;
-    }
-
-    orientationSubmenu.click();
-    await this.sleep(400);
-
-    const menuItem = this.findMenuItemRadioByText(orientationName);
-    if (menuItem) {
-      menuItem.click();
-      this.log(`Orientacao ${orientationName} selecionada`);
-      await this.sleep(300);
-    } else {
-      this.log('Opcao de orientacao nao encontrada');
-    }
-  }
-
-  async applyDurationSetting() {
-    const durationName = this.config.duration === 300 ? '10 seconds' : '15 seconds';
-    this.log(`Selecionando duracao: ${durationName}`);
-
-    // Procura o submenu de Duration
-    const durationSubmenu = this.findSubmenuTrigger('Duration');
-    if (!durationSubmenu) {
-      this.log('Submenu Duration nao encontrado');
-      return;
-    }
-
-    durationSubmenu.click();
-    await this.sleep(400);
-
-    const menuItem = this.findMenuItemRadioByText(durationName);
-    if (menuItem) {
-      menuItem.click();
-      this.log(`Duracao ${durationName} selecionada`);
-      await this.sleep(300);
-    } else {
-      this.log('Opcao de duracao nao encontrada');
-    }
-  }
-
-  findSubmenuTrigger(labelText) {
-    // Busca por menuitem com aria-haspopup="menu" que contem o texto
-    const menuItems = document.querySelectorAll('[role="menuitem"][aria-haspopup="menu"]');
-    for (const item of menuItems) {
-      const text = item.textContent.trim();
-      if (text.includes(labelText)) {
-        return item;
-      }
-    }
-    return null;
-  }
-
-  findMenuItemRadioByText(searchText) {
-    // Busca especificamente por menuitemradio
-    const menuItems = document.querySelectorAll('[role="menuitemradio"]');
-    for (const item of menuItems) {
-      const text = item.textContent.trim();
-      // Para "Sora 2 Pro" precisamos de match exato no inicio
-      // Para "Sora 2" precisamos evitar match com "Sora 2 Pro"
-      if (searchText === 'Sora 2 Pro') {
-        if (text.includes('Sora 2 Pro')) {
-          return item;
-        }
-      } else if (searchText === 'Sora 2') {
-        // Verifica se contem "Sora 2" mas NAO contem "Pro"
-        if (text.includes('Sora 2') && !text.includes('Pro')) {
-          return item;
-        }
-      } else {
-        // Para outros casos (Portrait, Landscape, 10 seconds, 15 seconds)
-        if (text.includes(searchText)) {
-          return item;
-        }
-      }
-    }
-    return null;
   }
 
   // ========================================
