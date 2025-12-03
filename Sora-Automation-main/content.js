@@ -1047,22 +1047,21 @@ class SoraPromptAutomation {
 
       this.log('Abrindo menu de configuracoes...');
       settingsButton.click();
-      await this.sleep(400);
+      await this.sleep(500);
 
       // 2. Aplicar Modelo
       await this.applyModelSetting();
-      await this.sleep(400);
 
       // 3. Aplicar Orientacao
       await this.applyOrientationSetting();
-      await this.sleep(400);
 
       // 4. Aplicar Duracao
       await this.applyDurationSetting();
-      await this.sleep(300);
 
-      // 5. Fecha o menu clicando fora
-      document.body.click();
+      // 5. Fecha o menu pressionando Escape
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await this.sleep(100);
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 
       this.log('Configuracao aplicada com sucesso!');
     } catch (error) {
@@ -1084,17 +1083,6 @@ class SoraPromptAutomation {
       }
     }
 
-    // Metodo 3: Busca por botao com chevron-down e texto Sora
-    const allButtons = document.querySelectorAll('button');
-    for (const button of allButtons) {
-      const hasChevron = button.querySelector('svg path[d*="m6 9 6 6 6-6"]') ||
-                         button.querySelector('.lucide-chevron-down');
-      const text = button.textContent.trim();
-      if (hasChevron && text.includes('Sora')) {
-        return button;
-      }
-    }
-
     return null;
   }
 
@@ -1102,107 +1090,111 @@ class SoraPromptAutomation {
     const modelName = this.config.model === 'sora2pro' ? 'Sora 2 Pro' : 'Sora 2';
     this.log(`Selecionando modelo: ${modelName}`);
 
-    // Procura o submenu de Model dentro do menu aberto
-    const modelSubmenu = this.findSubMenuByLabel(['Model', 'Modelo']);
-    if (modelSubmenu) {
-      modelSubmenu.click();
-      await this.sleep(300);
+    // Procura o submenu de Model (menuitem com aria-haspopup)
+    const modelSubmenu = this.findSubmenuTrigger('Model');
+    if (!modelSubmenu) {
+      this.log('Submenu Model nao encontrado');
+      return;
     }
 
-    // Procura pela opcao correta no menu
-    const menuItem = this.findMenuItemByText(modelName);
+    // Clica ou hover para abrir o submenu
+    modelSubmenu.click();
+    await this.sleep(400);
+
+    // Procura pela opcao correta (menuitemradio)
+    const menuItem = this.findMenuItemRadioByText(modelName);
     if (menuItem) {
       menuItem.click();
       this.log(`Modelo ${modelName} selecionado`);
+      await this.sleep(300);
     } else {
-      this.log('Opcao de modelo nao encontrada no menu');
+      this.log('Opcao de modelo nao encontrada');
     }
   }
 
   async applyOrientationSetting() {
-    const orientationLabels = {
-      'portrait': 'Portrait',
-      'landscape': 'Landscape'
-    };
-    const orientationName = orientationLabels[this.config.orientation] || 'Portrait';
+    const orientationName = this.config.orientation === 'portrait' ? 'Portrait' : 'Landscape';
     this.log(`Selecionando orientacao: ${orientationName}`);
 
     // Procura o submenu de Orientation
-    const orientationSubmenu = this.findSubMenuByLabel(['Orientation', 'Orientacao', 'Aspect']);
-    if (orientationSubmenu) {
-      orientationSubmenu.click();
-      await this.sleep(300);
+    const orientationSubmenu = this.findSubmenuTrigger('Orientation');
+    if (!orientationSubmenu) {
+      this.log('Submenu Orientation nao encontrado');
+      return;
     }
 
-    // Procura pela opcao correta
-    const menuItem = this.findMenuItemByText(orientationName);
+    orientationSubmenu.click();
+    await this.sleep(400);
+
+    const menuItem = this.findMenuItemRadioByText(orientationName);
     if (menuItem) {
       menuItem.click();
       this.log(`Orientacao ${orientationName} selecionada`);
+      await this.sleep(300);
     } else {
-      this.log('Opcao de orientacao nao encontrada no menu');
+      this.log('Opcao de orientacao nao encontrada');
     }
   }
 
   async applyDurationSetting() {
-    const durationLabels = {
-      300: '10s',
-      450: '15s'
-    };
-    const durationName = durationLabels[this.config.duration] || '10s';
+    const durationName = this.config.duration === 300 ? '10 seconds' : '15 seconds';
     this.log(`Selecionando duracao: ${durationName}`);
 
     // Procura o submenu de Duration
-    const durationSubmenu = this.findSubMenuByLabel(['Duration', 'Duracao', 'Length']);
-    if (durationSubmenu) {
-      durationSubmenu.click();
-      await this.sleep(300);
+    const durationSubmenu = this.findSubmenuTrigger('Duration');
+    if (!durationSubmenu) {
+      this.log('Submenu Duration nao encontrado');
+      return;
     }
 
-    // Procura pela opcao correta
-    const menuItem = this.findMenuItemByText(durationName);
+    durationSubmenu.click();
+    await this.sleep(400);
+
+    const menuItem = this.findMenuItemRadioByText(durationName);
     if (menuItem) {
       menuItem.click();
       this.log(`Duracao ${durationName} selecionada`);
+      await this.sleep(300);
     } else {
-      this.log('Opcao de duracao nao encontrada no menu');
+      this.log('Opcao de duracao nao encontrada');
     }
   }
 
-  findSubMenuByLabel(possibleLabels) {
-    // Busca por itens de menu que podem abrir submenus
-    const menuItems = document.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [data-radix-collection-item]');
+  findSubmenuTrigger(labelText) {
+    // Busca por menuitem com aria-haspopup="menu" que contem o texto
+    const menuItems = document.querySelectorAll('[role="menuitem"][aria-haspopup="menu"]');
     for (const item of menuItems) {
       const text = item.textContent.trim();
-      for (const label of possibleLabels) {
-        if (text.toLowerCase().includes(label.toLowerCase())) {
-          return item;
-        }
+      if (text.includes(labelText)) {
+        return item;
       }
     }
     return null;
   }
 
-  findMenuItemByText(searchText) {
-    // Busca em menus Radix UI
-    const menuItems = document.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [data-radix-collection-item]');
+  findMenuItemRadioByText(searchText) {
+    // Busca especificamente por menuitemradio
+    const menuItems = document.querySelectorAll('[role="menuitemradio"]');
     for (const item of menuItems) {
       const text = item.textContent.trim();
-      // Busca exata ou parcial
-      if (text === searchText || text.includes(searchText)) {
-        return item;
+      // Para "Sora 2 Pro" precisamos de match exato no inicio
+      // Para "Sora 2" precisamos evitar match com "Sora 2 Pro"
+      if (searchText === 'Sora 2 Pro') {
+        if (text.includes('Sora 2 Pro')) {
+          return item;
+        }
+      } else if (searchText === 'Sora 2') {
+        // Verifica se contem "Sora 2" mas NAO contem "Pro"
+        if (text.includes('Sora 2') && !text.includes('Pro')) {
+          return item;
+        }
+      } else {
+        // Para outros casos (Portrait, Landscape, 10 seconds, 15 seconds)
+        if (text.includes(searchText)) {
+          return item;
+        }
       }
     }
-
-    // Busca em elementos de opcao genericos
-    const options = document.querySelectorAll('[role="option"], .menu-item, [class*="MenuItem"]');
-    for (const option of options) {
-      const text = option.textContent.trim();
-      if (text === searchText || text.includes(searchText)) {
-        return option;
-      }
-    }
-
     return null;
   }
 
