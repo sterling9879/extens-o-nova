@@ -1038,16 +1038,31 @@ class SoraPromptAutomation {
     this.log('Aplicando configuracao ao Sora...');
 
     try {
-      // 1. Aplicar Modelo
+      // 1. Primeiro abre o menu de Settings
+      const settingsButton = this.findSettingsButton();
+      if (!settingsButton) {
+        this.log('Botao Settings nao encontrado na pagina');
+        return;
+      }
+
+      this.log('Abrindo menu de configuracoes...');
+      settingsButton.click();
+      await this.sleep(400);
+
+      // 2. Aplicar Modelo
       await this.applyModelSetting();
-      await this.sleep(500);
+      await this.sleep(400);
 
-      // 2. Aplicar Orientacao
+      // 3. Aplicar Orientacao
       await this.applyOrientationSetting();
-      await this.sleep(500);
+      await this.sleep(400);
 
-      // 3. Aplicar Duracao
+      // 4. Aplicar Duracao
       await this.applyDurationSetting();
+      await this.sleep(300);
+
+      // 5. Fecha o menu clicando fora
+      document.body.click();
 
       this.log('Configuracao aplicada com sucesso!');
     } catch (error) {
@@ -1055,20 +1070,44 @@ class SoraPromptAutomation {
     }
   }
 
-  async applyModelSetting() {
-    const modelName = this.config.model === 'sora2pro' ? 'Sora 2 Pro' : 'Sora 2';
-    this.log(`Aplicando modelo: ${modelName}`);
+  findSettingsButton() {
+    // Metodo 1: Busca pelo aria-label="Settings"
+    let btn = document.querySelector('button[aria-label="Settings"]');
+    if (btn) return btn;
 
-    // Procura pelo botao de modelo na interface do Sora
-    const modelButton = this.findSettingButton(['Sora 2 Pro', 'Sora 2']);
-    if (!modelButton) {
-      this.log('Botao de modelo nao encontrado');
-      return;
+    // Metodo 2: Busca por botao com aria-haspopup que contem "Sora" no texto
+    const dropdownButtons = document.querySelectorAll('button[aria-haspopup="menu"]');
+    for (const button of dropdownButtons) {
+      const text = button.textContent.trim();
+      if (text.includes('Sora 2') || text.includes('Sora')) {
+        return button;
+      }
     }
 
-    // Clica para abrir o dropdown
-    modelButton.click();
-    await this.sleep(300);
+    // Metodo 3: Busca por botao com chevron-down e texto Sora
+    const allButtons = document.querySelectorAll('button');
+    for (const button of allButtons) {
+      const hasChevron = button.querySelector('svg path[d*="m6 9 6 6 6-6"]') ||
+                         button.querySelector('.lucide-chevron-down');
+      const text = button.textContent.trim();
+      if (hasChevron && text.includes('Sora')) {
+        return button;
+      }
+    }
+
+    return null;
+  }
+
+  async applyModelSetting() {
+    const modelName = this.config.model === 'sora2pro' ? 'Sora 2 Pro' : 'Sora 2';
+    this.log(`Selecionando modelo: ${modelName}`);
+
+    // Procura o submenu de Model dentro do menu aberto
+    const modelSubmenu = this.findSubMenuByLabel(['Model', 'Modelo']);
+    if (modelSubmenu) {
+      modelSubmenu.click();
+      await this.sleep(300);
+    }
 
     // Procura pela opcao correta no menu
     const menuItem = this.findMenuItemByText(modelName);
@@ -1076,8 +1115,6 @@ class SoraPromptAutomation {
       menuItem.click();
       this.log(`Modelo ${modelName} selecionado`);
     } else {
-      // Fecha o dropdown se nao encontrou
-      document.body.click();
       this.log('Opcao de modelo nao encontrada no menu');
     }
   }
@@ -1088,17 +1125,14 @@ class SoraPromptAutomation {
       'landscape': 'Landscape'
     };
     const orientationName = orientationLabels[this.config.orientation] || 'Portrait';
-    this.log(`Aplicando orientacao: ${orientationName}`);
+    this.log(`Selecionando orientacao: ${orientationName}`);
 
-    // Procura pelo botao de orientacao
-    const orientationButton = this.findSettingButton(['Portrait', 'Landscape', '9:16', '16:9']);
-    if (!orientationButton) {
-      this.log('Botao de orientacao nao encontrado');
-      return;
+    // Procura o submenu de Orientation
+    const orientationSubmenu = this.findSubMenuByLabel(['Orientation', 'Orientacao', 'Aspect']);
+    if (orientationSubmenu) {
+      orientationSubmenu.click();
+      await this.sleep(300);
     }
-
-    orientationButton.click();
-    await this.sleep(300);
 
     // Procura pela opcao correta
     const menuItem = this.findMenuItemByText(orientationName);
@@ -1106,7 +1140,6 @@ class SoraPromptAutomation {
       menuItem.click();
       this.log(`Orientacao ${orientationName} selecionada`);
     } else {
-      document.body.click();
       this.log('Opcao de orientacao nao encontrada no menu');
     }
   }
@@ -1117,17 +1150,14 @@ class SoraPromptAutomation {
       450: '15s'
     };
     const durationName = durationLabels[this.config.duration] || '10s';
-    this.log(`Aplicando duracao: ${durationName}`);
+    this.log(`Selecionando duracao: ${durationName}`);
 
-    // Procura pelo botao de duracao
-    const durationButton = this.findSettingButton(['10s', '15s', '5s', '20s']);
-    if (!durationButton) {
-      this.log('Botao de duracao nao encontrado');
-      return;
+    // Procura o submenu de Duration
+    const durationSubmenu = this.findSubMenuByLabel(['Duration', 'Duracao', 'Length']);
+    if (durationSubmenu) {
+      durationSubmenu.click();
+      await this.sleep(300);
     }
-
-    durationButton.click();
-    await this.sleep(300);
 
     // Procura pela opcao correta
     const menuItem = this.findMenuItemByText(durationName);
@@ -1135,45 +1165,21 @@ class SoraPromptAutomation {
       menuItem.click();
       this.log(`Duracao ${durationName} selecionada`);
     } else {
-      document.body.click();
       this.log('Opcao de duracao nao encontrada no menu');
     }
   }
 
-  findSettingButton(possibleTexts) {
-    // Metodo 1: Busca por botoes com aria-haspopup (dropdowns Radix UI)
-    const dropdownButtons = document.querySelectorAll('button[aria-haspopup="menu"]');
-    for (const btn of dropdownButtons) {
-      const text = btn.textContent.trim();
-      for (const searchText of possibleTexts) {
-        if (text.includes(searchText)) {
-          return btn;
+  findSubMenuByLabel(possibleLabels) {
+    // Busca por itens de menu que podem abrir submenus
+    const menuItems = document.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [data-radix-collection-item]');
+    for (const item of menuItems) {
+      const text = item.textContent.trim();
+      for (const label of possibleLabels) {
+        if (text.toLowerCase().includes(label.toLowerCase())) {
+          return item;
         }
       }
     }
-
-    // Metodo 2: Busca por elementos com role menuitem ou menuitemradio
-    const menuTriggers = document.querySelectorAll('[role="menuitem"], [data-radix-collection-item]');
-    for (const trigger of menuTriggers) {
-      const text = trigger.textContent.trim();
-      for (const searchText of possibleTexts) {
-        if (text.includes(searchText)) {
-          return trigger;
-        }
-      }
-    }
-
-    // Metodo 3: Busca por qualquer botao que contenha o texto
-    const allButtons = document.querySelectorAll('button');
-    for (const btn of allButtons) {
-      const text = btn.textContent.trim();
-      for (const searchText of possibleTexts) {
-        if (text.includes(searchText)) {
-          return btn;
-        }
-      }
-    }
-
     return null;
   }
 
@@ -1182,7 +1188,8 @@ class SoraPromptAutomation {
     const menuItems = document.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [data-radix-collection-item]');
     for (const item of menuItems) {
       const text = item.textContent.trim();
-      if (text.includes(searchText)) {
+      // Busca exata ou parcial
+      if (text === searchText || text.includes(searchText)) {
         return item;
       }
     }
@@ -1191,7 +1198,7 @@ class SoraPromptAutomation {
     const options = document.querySelectorAll('[role="option"], .menu-item, [class*="MenuItem"]');
     for (const option of options) {
       const text = option.textContent.trim();
-      if (text.includes(searchText)) {
+      if (text === searchText || text.includes(searchText)) {
         return option;
       }
     }
